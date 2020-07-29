@@ -1,0 +1,73 @@
+job("job1"){
+scm{
+github("https://github.com/zerocool-11/dev_test.git","master")
+}
+
+triggers{
+ gitHubPushTrigger() 
+}
+steps{
+shell("sudo cp -r *  /mnt/dev/ \n sudo rm -rf *")
+}
+}
+
+
+job("dep"){
+triggers{
+ upstream('job1','SUCCESS') 
+}
+steps{
+shell('#!/bin/bash\ncd /mnt/dev/\n#sudo mv index.php  index.html\nfile=$(echo  $(ls index*))\nx=$( echo  $file |awk -F . \'{if (NF>1) {print $NF}}\' )\nif [[ $x == php ]]\nthen\necho "launching php-server"\n  if sudo kubectl get deployments | grep testing-php\n  then\n  sudo kubectl  delete deployment testing-php\n  sudo kubectl create -f ../web-php-deployment.yml\n  sleep 180\n  pod=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[1].metadata.name}")\n  pod1=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[0].metadata.name}")\n  sudo kubectl cp * $pod1:/var/www/html/\n  sudo kubectl cp  * $pod:/var/www/html/\n  \n    if sudo kubectl get service web-php\n    then\n    sudo kubectl delete service web-php\n    sudo kubectl expose deployment testing-php --name=web-php --type=NodePort    --port=80\n    else\n    sudo kubectl expose deployment testing-php --name=web-php --type=NodePort    --port=80\n    fi\n  else\n  sudo kubectl create -f ../web-php-deployment.yml\n  sleep 180\n  pod=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[1].metadata.name}")\n  pod1=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[0].metadata.name}")\n  sudo kubectl cp * $pod1:/var/www/html/\n  sudo kubectl cp  * $pod:/var/www/html/\n    if sudo kubectl get service web-php\n    then\n    sudo kubectl delete service web-php\n    sudo kubectl expose deployment testing-php --name=web-php --type=NodePort    --port=80\n    else\n    sudo kubectl expose deployment testing-php --name=web-php --type=NodePort    --port=80\n    fi\n  fi\nelse\necho  "launching html server"\n  if sudo kubectl get deployments | grep testing-html\n  then\n  sudo kubectl  delete deployment testing-html\n  sudo kubectl create -f ../web-html-deployment.yml \n  sleep 180\n  pod=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[1].metadata.name}")\n  pod1=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[0].metadata.name}")\n  sudo kubectl cp * $pod1:/usr/local/apache2/htdocs/\n  sudo kubectl cp  * $pod:/usr/local/apache2/htdocs/  \n    if sudo kubectl get service web-html\n    then\n    sudo kubectl delete service web-html\n    sudo kubectl expose deployment testing-html --name=web-html --type=NodePort    --port=80\n    else\n    sudo kubectl expose deployment testing-html --name=web-html --type=NodePort    --port=80\n    fi\n  else\n  sudo kubectl create -f ../web-html-deployment.yml\n  sleep 180\n  pod=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[1].metadata.name}")\n  pod1=$(sudo kubectl get pod -l env=testing -o jsonpath="{.items[0].metadata.name}")\n  sudo kubectl cp  * $pod1:/usr/local/apache2/htdocs/\n  sudo kubectl cp  * $pod:/usr/local/apache2/htdocs/\n    if sudo kubectl get service web-html\n    then\n    sudo kubectl delete service web-html\n    sudo kubectl expose deployment testing-html --name=web-html --type=NodePort    --port=80\n    else\n    sudo kubectl expose deployment testing-html --name=web-html --type=NodePort    --port=80\n    fi\n  fi\nfi\n')
+}
+
+}
+
+
+job("test"){
+triggers{
+upstream('dep','SUCCESS')
+}
+steps{
+shell('#!/bin/bash\nif kubectl get service web-php\nthen\nphp=$(kubectl get service web-php -o jsonpath="{.spec.ports[0].nodePort}")\n  if [[ $(sudo curl  -s -w "%{http_code}" http://192.168.99.103:$php/ -o /dev/null) == 200 ]]\n  then\n  exit 0\n  else\n  echo "testing  failed"\n  exit 1\n  fi\nelse\nhtml=$(kubectl get service web-html -o jsonpath="{.spec.ports[0].nodePort}")\n  if [[ $(sudo curl  -s -w "%{http_code}" http://192.168.99.103:$php/ -o /dev/null) == 200 ]]\n  then\n  exit 0\n  else\n  echo "testing  failed"\n  exit 1\n  fi\nfi\n')
+}
+}
+
+
+
+job("mail"){
+          
+triggers {
+                      
+ upstream('test', 'UNSTABLE')
+ }
+ publishers {
+ extendedEmail {
+ recipientList('nikita211211211@gmail.com')
+ defaultSubject('webpage is not working properly')
+ defaultContent(""" hloo developer
+ check your code it is not working properly""")
+ contentType('text/plain')
+ triggers {
+    beforeBuild()
+    stillUnstable {
+    subject('Subject')
+    content('Body')
+    sendTo {
+    developers()
+    requester()
+    culprits()
+    }
+}
+}
+}
+}
+}
+
+
+
+buildPipelineView('task_6') {
+    
+ title('taask6')
+ selectedJob('job1')
+ refreshFrequency(60)
+}
